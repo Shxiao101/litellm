@@ -50,7 +50,7 @@ pub(super) async fn execute(
     let wire = hooks
         .before_provider_request(
             WireRequest {
-                url,
+                url: url.into(),
                 headers: authenticated.headers,
                 body: serde_json::to_value(&body).map_err(serialize_failure)?,
             },
@@ -113,7 +113,9 @@ async fn send(
 ) -> Result<reqwest::Response, Error> {
     let request = outbound_request(
         authenticated,
-        url.to_string(),
+        litellm_core_utils::url_utils::ApiUrl::parse(url)
+            .map_err(litellm_llms::Error::from)?
+            .into_url(),
         body,
         Some(timeout.unwrap_or(Duration::from_secs(MESSAGES_TIMEOUT_SECS))),
     )?;

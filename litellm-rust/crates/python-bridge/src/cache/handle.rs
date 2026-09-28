@@ -13,7 +13,6 @@ use pyo3::{
     exceptions::{PyRuntimeError, PyTypeError},
     prelude::*,
 };
-use url::Url;
 
 use super::{
     cache_error,
@@ -177,29 +176,11 @@ impl CacheTestHandle {
         embedding_timeout_seconds: Option<f64>,
         quantization: &str,
     ) -> PyResult<Self> {
-        let parsed = Url::parse(&url).map_err(|_| {
+        let grpc_url = super::config::qdrant_grpc_url(&url).map_err(|_| {
             pyo3::exceptions::PyValueError::new_err(
                 "native Qdrant requires the default REST port so the gRPC port can be derived",
             )
         })?;
-        if !matches!(parsed.scheme(), "http" | "https")
-            || (!parsed.path().is_empty() && parsed.path() != "/")
-            || parsed.query().is_some()
-            || parsed.host_str().is_none()
-            || parsed.port() != Some(6333)
-        {
-            return Err(pyo3::exceptions::PyValueError::new_err(
-                "native Qdrant requires the default REST port so the gRPC port can be derived",
-            ));
-        }
-        let mut grpc_url = parsed;
-        grpc_url.set_port(Some(6334)).map_err(|_| {
-            pyo3::exceptions::PyValueError::new_err(
-                "native Qdrant requires the default REST port so the gRPC port can be derived",
-            )
-        })?;
-        grpc_url.set_path("");
-        grpc_url.set_query(None);
         let embedding_api_key = embedding_api_key
             .or_else(|| {
                 std::env::var("OPENAI_API_KEY")
@@ -227,7 +208,7 @@ impl CacheTestHandle {
             }
         };
         let config = QdrantSemanticCacheConfig {
-            grpc_url: grpc_url.to_string().trim_end_matches('/').to_owned(),
+            grpc_url: grpc_url.into(),
             api_key,
             collection_name,
             similarity_threshold,

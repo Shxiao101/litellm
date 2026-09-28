@@ -22,7 +22,7 @@ pub(super) async fn execute(
     let wire = hooks
         .before_provider_request(
             WireRequest {
-                url: request.url,
+                url: request.url.into(),
                 headers: authenticated.headers,
                 body: request.body,
             },
@@ -39,7 +39,9 @@ pub(super) async fn execute(
             headers: wire.headers,
             signer: authenticated.signer,
         },
-        wire.url,
+        litellm_core_utils::url_utils::ApiUrl::parse(&wire.url)
+            .map_err(litellm_llms::Error::from)?
+            .into_url(),
         &wire.body,
         Some(request.timeout.unwrap_or(Duration::from_secs(600))),
     )?;

@@ -48,7 +48,7 @@ pub(super) async fn execute(
     let wire = hooks
         .before_provider_request(
             WireRequest {
-                url,
+                url: url.into(),
                 headers: authenticated.headers,
                 body,
             },
@@ -60,7 +60,9 @@ pub(super) async fn execute(
             headers: wire.headers,
             signer: authenticated.signer,
         },
-        wire.url,
+        litellm_core_utils::url_utils::ApiUrl::parse(&wire.url)
+            .map_err(litellm_llms::Error::from)?
+            .into_url(),
         &wire.body,
         timeout,
     )?;
@@ -125,7 +127,7 @@ pub(super) fn as_response_error(err: Error) -> Error {
 
 pub(super) fn outbound_request(
     authenticated: Authenticated,
-    url: String,
+    url: url::Url,
     body: &Value,
     timeout: Option<Duration>,
 ) -> Result<OutboundRequest, Error> {
