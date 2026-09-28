@@ -72,7 +72,7 @@ pub trait PythonCallHooks: Sized + PythonOwned {
 
     /// The call streams and its stream was handed to the caller. The caller is not
     /// inside an await here, so this step and `on_stream_chunk` cannot suspend.
-    fn on_stream_open(&mut self, py: Python<'_>) -> PyResult<()>;
+    fn on_stream_open(&mut self, py: Python<'_>, head: &Py<PyAny>) -> PyResult<()>;
 
     /// One chunk of an open stream is about to reach the caller.
     fn on_stream_chunk(&mut self, py: Python<'_>, chunk: &Py<PyAny>) -> PyResult<()>;

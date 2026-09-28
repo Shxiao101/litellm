@@ -17,9 +17,9 @@ from litellm.types.caching import LiteLLMCacheType
 from tests.test_litellm_rust.support.cache import (
     CacheTestHandle,
     CacheTestResolver,
+    activate_native,
     assert_native_runtime,
     request,
-    require_rust,
 )
 
 pytestmark: Final = pytest.mark.requires_rust_extension
@@ -274,12 +274,11 @@ def test_qdrant_semantic_mutation_and_projection_fallback(qdrant_url: str, fake_
         handle._bind_facade(unsupported)
 
 
-def test_qdrant_semantic_rust_required_rule_activates_natively(
+def test_qdrant_semantic_explicit_selection_activates_natively(
     qdrant_url: str, fake_embedding_endpoint: str, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     del fake_embedding_endpoint
-    require_rust(monkeypatch, LiteLLMCacheType.QDRANT_SEMANTIC)
-    facade: Final = qdrant_facade(qdrant_url, f"cache_{uuid4().hex}")
+    facade: Final = activate_native(qdrant_facade(qdrant_url, f"cache_{uuid4().hex}"))
     assert_native_runtime(facade)
     kwargs: Final = {"model": "gpt-4o", "messages": [{"role": "user", "content": "qdrant activation"}]}
     facade.add_cache({"answer": "qdrant"}, **kwargs)

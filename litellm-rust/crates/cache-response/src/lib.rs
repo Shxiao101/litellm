@@ -3,6 +3,7 @@ mod caching;
 mod codec;
 mod embedding;
 mod exact;
+mod inference;
 mod response;
 
 pub use buffer::WriteBuffer;
@@ -14,3 +15,5 @@ pub use codec::ResponseCacheCodec;
 pub use embedding::PartialHits;
 pub use exact::{ConnectionProbe, ExactResponseCache};
 pub use response::{ResponseCache, ResponseCacheRequest};
+
+pub use inference::{InferenceCache, InferenceCacheOptions, InferenceCacheSession};

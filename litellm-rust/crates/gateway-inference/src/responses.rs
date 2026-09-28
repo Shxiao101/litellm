@@ -15,6 +15,11 @@ pub(crate) async fn create(
 ) -> Result<Response, Error> {
     let deployment = request::resolve_deployment(&gateway, &body)?;
     request::authorize_model(&identity, deployment, &body).await?;
+    let (body, cache) = crate::caching::prepare(&gateway, &identity, body)?;
+    let route = match cache {
+        Some((cache, options)) => gateway.responses.clone().with_cache(cache, options),
+        None => gateway.responses.clone(),
+    };
     let call = ResponsesCall {
         model: deployment.model.clone(),
         input: body.get("input").cloned().unwrap_or_default(),
@@ -28,7 +33,7 @@ pub(crate) async fn create(
         extra_headers: None,
         timeout: deployment.timeout,
     };
-    let machine = gateway.responses.clone().machine(call);
+    let machine = route.machine(call);
     let stream = Sse::<Responses, _, _>::new(Json, |error| {
         let error = Error::from(error);
         Bytes::from(format!(
@@ -36,5 +41,7 @@ pub(crate) async fn create(
             json!({"type": "error", "code": error.status().as_u16().to_string(), "message": error.to_string(), "param": null})
         ))
     });
-    Ok(litellm_host_http::serve(machine, (), (), stream).await?)
+    let headers = crate::caching::CacheHeaders::default();
+    let response = litellm_host_http::serve(machine, (), headers.clone(), stream).await?;
+    Ok(headers.apply(response))
 }

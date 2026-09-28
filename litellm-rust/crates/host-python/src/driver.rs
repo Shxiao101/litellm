@@ -412,7 +412,7 @@ where
             Ok(head) => head,
             Err(error) => return self.interrupt(py, error),
         };
-        match self.hooks.on_stream_open(py) {
+        match self.hooks.on_stream_open(py, &head) {
             Ok(()) => {
                 self.pending = Some(Pending::Consumer(reply));
                 Ok(ExecutionStep::Open(head))
@@ -855,6 +855,7 @@ sys.modules.setdefault('litellm.rust_bridge', types.ModuleType('litellm.rust_bri
         ) -> PyResult<HookStep<Self, ()>> {
             self.log.push(match event {
                 HookEvent::Started { .. } => "started".into(),
+                HookEvent::Machine(MachineEvent::CacheHit { .. }) => "cache_hit".into(),
                 HookEvent::Machine(MachineEvent::ResponseReceived { raw }) => {
                     format!("response:{}", raw.body)
                 }
@@ -868,7 +869,7 @@ sys.modules.setdefault('litellm.rust_bridge', types.ModuleType('litellm.rust_bri
             Ok(HookStep::Ready(()))
         }
 
-        fn on_stream_open(&mut self, _: Python<'_>) -> PyResult<()> {
+        fn on_stream_open(&mut self, _: Python<'_>, _: &Py<PyAny>) -> PyResult<()> {
             self.log.push("opened");
             Ok(())
         }

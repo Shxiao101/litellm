@@ -18,10 +18,10 @@ from tests.test_litellm_rust.support.cache import (
     CacheLookup,
     CacheTestHandle,
     CacheTestResolver,
+    activate_native,
     assert_native_runtime,
     completion_kwargs,
     request,
-    require_rust,
 )
 from tests.test_litellm_rust.support.isolation import rebound
 
@@ -148,17 +148,18 @@ async def test_azure_blob_native_async_writes_overwrite_batch_and_flush_like_pyt
     assert await binding.async_lookup(request("async")) is None
 
 
-async def test_azure_blob_rust_required_rule_activates_natively(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_azure_blob_explicit_selection_activates_natively(monkeypatch: pytest.MonkeyPatch) -> None:
     account_url: Final = os.environ.get("AZURE_BLOB_CACHE_ACCOUNT_URL")
     if account_url is None:
         pytest.skip(
             "live Azure Blob parity needs AZURE_BLOB_CACHE_ACCOUNT_URL plus DefaultAzureCredential inputs in the environment"
         )
-    require_rust(monkeypatch, LiteLLMCacheType.AZURE_BLOB)
-    facade: Final = Cache(
-        type=LiteLLMCacheType.AZURE_BLOB,
-        azure_account_url=account_url,
-        azure_blob_container=f"litellm-parity-{uuid.uuid4().hex[:12]}",
+    facade: Final = activate_native(
+        Cache(
+            type=LiteLLMCacheType.AZURE_BLOB,
+            azure_account_url=account_url,
+            azure_blob_container=f"litellm-parity-{uuid.uuid4().hex[:12]}",
+        )
     )
     backend: Final = facade.cache
     assert isinstance(backend, AzureBlobCache)

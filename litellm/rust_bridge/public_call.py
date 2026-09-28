@@ -45,8 +45,8 @@ def optional_sequence(value: object) -> Sequence[object] | None:
 def inference_decline_reason(parameters: tuple[str, ...], kwargs: Mapping[str, object]) -> str | None:
     import litellm
 
-    if litellm.cache is not None or litellm.drop_params or litellm.modify_params:
-        return "native inference does not implement the configured cache or parameter rewrites"
+    if litellm.drop_params or litellm.modify_params:
+        return "native inference does not implement the configured parameter rewrites"
     context: Final = frozenset(
         {
             "model",
@@ -73,6 +73,8 @@ def inference_decline_reason(parameters: tuple[str, ...], kwargs: Mapping[str, o
     )
     for name, value in kwargs.items():
         if value is None:
+            continue
+        if name in {"cache", "caching"}:
             continue
         if name not in parameters and name not in context:
             return f"native inference does not implement {name}"

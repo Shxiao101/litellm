@@ -22,9 +22,9 @@ from litellm.types.utils import EmbeddingResponse
 from tests.test_litellm_rust.support.cache import (
     CacheTestHandle,
     CacheTestResolver,
+    activate_native,
     assert_native_runtime,
     request,
-    require_rust,
 )
 from tests.test_litellm_rust.support.isolation import rebound
 
@@ -587,18 +587,19 @@ def test_redis_semantic_handle_rejects_wrong_backends(
         CacheTestHandle.redis_semantic(facade.cache)._bind_facade(replacement_facade)
 
 
-async def test_redis_semantic_rust_required_rule_activates_natively(
+async def test_redis_semantic_explicit_selection_activates_natively(
     redis_stack: tuple[str, str], semantic_embedding: DeterministicEmbedding, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     del semantic_embedding
     url, index = redis_stack
-    require_rust(monkeypatch, LiteLLMCacheType.REDIS_SEMANTIC)
-    facade: Final = Cache(
-        type=LiteLLMCacheType.REDIS_SEMANTIC,
-        redis_url=url,
-        similarity_threshold=0.8,
-        redis_semantic_cache_embedding_model=SEMANTIC_EMBEDDING_MODEL,
-        redis_semantic_cache_index_name=index,
+    facade: Final = activate_native(
+        Cache(
+            type=LiteLLMCacheType.REDIS_SEMANTIC,
+            redis_url=url,
+            similarity_threshold=0.8,
+            redis_semantic_cache_embedding_model=SEMANTIC_EMBEDDING_MODEL,
+            redis_semantic_cache_index_name=index,
+        )
     )
     assert_native_runtime(facade)
     kwargs: Final = {"model": "gpt-4o", "messages": semantic_messages("name a primary color")}

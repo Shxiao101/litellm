@@ -31,6 +31,10 @@ fn run_messages(
         crate::http::resources().auth.clone(),
         crate::secrets::source(py)?,
     );
+    let route = match crate::cache::v2::configured(py, &kwargs)? {
+        Some((cache, options)) => route.with_cache(cache, options),
+        None => route,
+    };
     run_legacy_call(
         py,
         SURFACE,

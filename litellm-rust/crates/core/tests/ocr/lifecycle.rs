@@ -12,6 +12,7 @@ use super::*;
 pub(crate) fn event_name(event: &CallEvent) -> &'static str {
     match event {
         CallEvent::Started { .. } => "started",
+        CallEvent::Machine(MachineEvent::CacheHit { .. }) => "cache_hit",
         CallEvent::Machine(MachineEvent::ResponseReceived { .. }) => "response",
         CallEvent::Succeeded { .. } => "success",
         CallEvent::Failed { .. } => "failure",

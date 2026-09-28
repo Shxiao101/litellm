@@ -66,6 +66,7 @@ pub struct LegacyLogging {
     stream: Option<DeliveredStream>,
     asynchronous: bool,
     internal: bool,
+    cache_key: Option<String>,
 }
 
 fn datetime(py: Python<'_>, epoch_seconds: f64) -> PyResult<Py<PyAny>> {
@@ -95,6 +96,7 @@ impl LegacyLogging {
             stream: None,
             asynchronous,
             internal: false,
+            cache_key: None,
         }
     }
 
@@ -188,10 +190,10 @@ impl LegacyLogging {
                 logger.object(py),
                 billing.url_route,
                 billing.endpoint_type,
-                &self
-                    .request
-                    .as_ref()
-                    .map(|request| request.body.clone_ref(py)),
+                &self.request.as_ref().map_or_else(
+                    || self.call.kwargs().clone_ref(py),
+                    |request| request.body.clone_ref(py),
+                ),
                 &stream.chunks,
                 &self.start,
                 &self.end,
@@ -224,10 +226,10 @@ impl LegacyLogging {
             (
                 logger.object(py),
                 billing.endpoint_type,
-                &self
-                    .request
-                    .as_ref()
-                    .map(|request| request.body.clone_ref(py)),
+                &self.request.as_ref().map_or_else(
+                    || self.call.kwargs().clone_ref(py),
+                    |request| request.body.clone_ref(py),
+                ),
                 &stream.chunks,
                 error,
             ),
@@ -409,6 +411,18 @@ impl PythonCallHooks for LegacyLogging {
     fn on_event(&mut self, py: Python<'_>, event: HookEvent<'_>) -> PyResult<HookStep<Self, ()>> {
         match event {
             HookEvent::Started { .. } => Ok(HookStep::Ready(())),
+            HookEvent::Machine(MachineEvent::CacheHit { key }) => {
+                self.cache_key = Some(key.clone());
+                self.logger()?
+                    .object(py)
+                    .getattr("model_call_details")?
+                    .set_item("cache_key", key)?;
+                self.logger()?
+                    .object(py)
+                    .getattr("model_call_details")?
+                    .set_item("cache_hit", true)?;
+                Ok(HookStep::Ready(()))
+            }
             HookEvent::Machine(MachineEvent::ResponseReceived { raw }) => {
                 let api_key = self
                     .request
@@ -463,9 +477,13 @@ impl PythonCallHooks for LegacyLogging {
         }
     }
 
-    fn on_stream_open(&mut self, py: Python<'_>) -> PyResult<()> {
+    fn on_stream_open(&mut self, py: Python<'_>, head: &Py<PyAny>) -> PyResult<()> {
         if self.surface.stream.is_none() {
             return Err(missing_state());
+        }
+        if let Some(key) = &self.cache_key {
+            head.bind(py).set_item("cache_key", key)?;
+            head.bind(py).set_item("cache_hit", true)?;
         }
         Streaming::Opened.call(py, (self.logger()?.object(py),))?;
         self.stream = Some(DeliveredStream {

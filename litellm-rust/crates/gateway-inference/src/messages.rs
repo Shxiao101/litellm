@@ -43,11 +43,18 @@ async fn handle(
 ) -> Result<Response, Error> {
     let deployment = request::resolve_deployment(gateway, &body)?;
     request::authorize_model(identity, deployment, &body).await?;
+    let (body, cache) = crate::caching::prepare(gateway, identity, body)?;
+    let route = match cache {
+        Some((cache, options)) => gateway.messages.clone().with_cache(cache, options),
+        None => gateway.messages.clone(),
+    };
     let call = project(deployment, body, headers)?;
-    let machine = gateway.messages.clone().machine(call);
+    let machine = route.machine(call);
     let stream =
         Sse::<Messages, _, _>::new(Json, |error| Bytes::from(Error::from(error).sse_frame()));
-    Ok(litellm_host_http::serve(machine, (), (), stream).await?)
+    let headers = crate::caching::CacheHeaders::default();
+    let response = litellm_host_http::serve(machine, (), headers.clone(), stream).await?;
+    Ok(headers.apply(response))
 }
 
 fn project(

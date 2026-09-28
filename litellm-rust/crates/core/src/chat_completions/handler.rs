@@ -189,8 +189,9 @@ mod tests {
         }
 
         async fn on_event(&self, event: MachineEvent) -> Result<(), Error> {
-            let MachineEvent::ResponseReceived { raw } = event;
-            self.raw.lock().unwrap().push(raw.body);
+            if let MachineEvent::ResponseReceived { raw } = event {
+                self.raw.lock().unwrap().push(raw.body);
+            }
             Ok(())
         }
     }

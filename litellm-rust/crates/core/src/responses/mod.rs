@@ -18,6 +18,10 @@ pub struct ResponsesRoute {
     http: litellm_http::Client,
     auth: Arc<AuthServices>,
     secrets: Arc<dyn SecretSource>,
+    cache: Option<(
+        litellm_cache_response::InferenceCache,
+        litellm_cache_response::InferenceCacheOptions,
+    )>,
 }
 
 impl ResponsesRoute {
@@ -30,6 +34,18 @@ impl ResponsesRoute {
             http,
             auth,
             secrets,
+            cache: None,
+        }
+    }
+
+    pub fn with_cache(
+        self,
+        cache: litellm_cache_response::InferenceCache,
+        options: litellm_cache_response::InferenceCacheOptions,
+    ) -> Self {
+        Self {
+            cache: Some((cache, options)),
+            ..self
         }
     }
 
@@ -41,6 +57,17 @@ impl ResponsesRoute {
         litellm_host::lifecycle::observe_call(hooks.observer(), self.run(call, hooks)).await
     }
 
+    async fn run(
+        &self,
+        call: ResponsesCall,
+        hooks: &impl litellm_host::hooks::RouteHooks<Error>,
+    ) -> Result<ResponsesOutput, Error> {
+        crate::caching::execute::<route::Responses, _, _>(call, self.cache.clone(), hooks, |call| {
+            self.run_provider(call, hooks)
+        })
+        .await
+    }
+
     #[tracing::instrument(name = "litellm.route", skip_all, fields(
         route = "responses",
         model = %call.model,
@@ -49,7 +76,7 @@ impl ResponsesRoute {
         stream = call.optional_params.get("stream").and_then(serde_json::Value::as_bool).unwrap_or(false),
         outcome
     ))]
-    async fn run(
+    async fn run_provider(
         &self,
         call: ResponsesCall,
         hooks: &impl RouteHooks<Error>,

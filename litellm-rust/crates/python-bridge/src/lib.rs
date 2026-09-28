@@ -53,6 +53,7 @@ mod _native {
     fn init(module: &Bound<'_, PyModule>) -> PyResult<()> {
         let py = module.py();
         let dict = module.dict();
+        dict.set_item("InferenceCacheV2", py.get_type::<crate::cache::v2::Cache>())?;
         dict.set_item("_CacheTestHandle", py.get_type::<CacheTestHandle>())?;
         dict.set_item("_CacheResolver", py.get_type::<CacheResolver>())?;
         dict.set_item("_CacheTestResolver", py.get_type::<CacheResolver>())?;
@@ -80,6 +81,7 @@ mod tests {
         Python::initialize();
         Python::attach(|py| {
             let mut expected = vec![
+                "InferenceCacheV2",
                 "RustBridgeDeclined",
                 "RustUpstreamError",
                 "ForkedAfterNativeRuntimeStarted",

@@ -42,28 +42,31 @@ async fn handle(
 ) -> Result<Response, Error> {
     let deployment = request::resolve_deployment(gateway, &body)?;
     request::authorize_model(identity, deployment, &body).await?;
+    let (body, cache) = crate::caching::prepare(gateway, identity, body)?;
+    let route = match cache {
+        Some((cache, options)) => gateway.chat_completions.clone().with_cache(cache, options),
+        None => gateway.chat_completions.clone(),
+    };
     let messages = body.get("messages").cloned().unwrap_or_default();
+    let headers = crate::caching::CacheHeaders::default();
     let response = litellm_host_http::serve_unary(
-        gateway
-            .chat_completions
-            .clone()
-            .machine(ChatCompletionsCall {
-                model: deployment.model.clone(),
-                messages,
-                optional_params: body
-                    .into_iter()
-                    .filter(|(name, _)| !matches!(name.as_str(), "model" | "messages"))
-                    .collect(),
-                api_key: deployment.api_key.clone(),
-                api_base: deployment.api_base.clone(),
-                custom_llm_provider: deployment.custom_llm_provider.clone(),
-                extra_headers: None,
-                timeout: deployment.timeout,
-            }),
+        route.machine(ChatCompletionsCall {
+            model: deployment.model.clone(),
+            messages,
+            optional_params: body
+                .into_iter()
+                .filter(|(name, _)| !matches!(name.as_str(), "model" | "messages"))
+                .collect(),
+            api_key: deployment.api_key.clone(),
+            api_base: deployment.api_base.clone(),
+            custom_llm_provider: deployment.custom_llm_provider.clone(),
+            extra_headers: None,
+            timeout: deployment.timeout,
+        }),
         (),
-        (),
+        headers.clone(),
         litellm_host_http::Unary::new(Json),
     )
     .await?;
-    Ok(response)
+    Ok(headers.apply(response))
 }

@@ -11,17 +11,15 @@ import redis
 import litellm
 from litellm.caching.caching import Cache
 from litellm.caching.redis_cluster_cache import RedisClusterCache
-from litellm.rust_bridge import catalog
-from litellm.rust_bridge.catalog import CacheRule
-from litellm.rust_bridge.configuration import Rollout
+from litellm.rust_bridge import _native
 from litellm.types.caching import LiteLLMCacheType
 from tests.test_litellm_rust.support.cache import (
     CacheTestHandle,
     CacheTestResolver,
+    activate_native,
     assert_native_runtime,
     completion_kwargs,
     request,
-    require_rust,
 )
 from tests.test_litellm_rust.support.isolation import rebound
 
@@ -190,19 +188,16 @@ def redis_facade(redis_url: str, **settings: object) -> Cache:
 def test_redis_settings_the_native_client_cannot_honor_decline(
     redis_url: str, monkeypatch: pytest.MonkeyPatch, settings: dict[str, object], message: str
 ) -> None:
-    require_rust(monkeypatch, LiteLLMCacheType.REDIS)
-    with pytest.raises(RuntimeError, match=f"declined the cache: native Redis.*{message}"):
-        redis_facade(redis_url, **settings)
+    with pytest.raises(_native.RustBridgeDeclined, match=f" native Redis.*{message}"):
+        activate_native(redis_facade(redis_url, **settings))
 
 
 def test_redis_verified_tls_activates_natively(redis_url: str, monkeypatch: pytest.MonkeyPatch) -> None:
-    require_rust(monkeypatch, LiteLLMCacheType.REDIS)
-    assert_native_runtime(redis_facade(redis_url, ssl=True, ssl_check_hostname=True))
+    assert_native_runtime(activate_native(redis_facade(redis_url, ssl=True, ssl_check_hostname=True)))
 
 
 async def test_redis_flush_size_buffers_native_facade_writes(redis_url: str, monkeypatch: pytest.MonkeyPatch) -> None:
-    require_rust(monkeypatch, LiteLLMCacheType.REDIS)
-    facade: Final = redis_facade(redis_url, redis_flush_size=2, namespace="team")
+    facade: Final = activate_native(redis_facade(redis_url, redis_flush_size=2, namespace="team"))
     assert_native_runtime(facade)
     client: Final = redis.Redis.from_url(redis_url)
     first: Final = completion_kwargs("first")
@@ -217,12 +212,5 @@ async def test_redis_flush_size_buffers_native_facade_writes(redis_url: str, mon
     client.close()
 
 
-def test_rust_with_fallback_keeps_python_when_the_native_client_declines(
-    redis_url: str, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    monkeypatch.setattr(
-        catalog,
-        "RULES",
-        (CacheRule(Rollout.RUST_OPT_OUT, backends=frozenset({LiteLLMCacheType.REDIS})),),
-    )
+def test_legacy_constructor_accepts_python_only_settings(redis_url: str, monkeypatch: pytest.MonkeyPatch) -> None:
     assert redis_facade(redis_url, socket_timeout=1.0)._native_cache is None  # pyright: ignore[reportPrivateUsage]  # the activation under test has no public accessor

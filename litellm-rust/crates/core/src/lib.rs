@@ -1,6 +1,7 @@
 mod diagnostic;
 
 pub mod audio_transcription;
+pub mod caching;
 pub mod chat_completions;
 pub mod constants;
 pub mod error;

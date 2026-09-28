@@ -34,31 +34,55 @@ pub fn app_with_permissions(
     api_base: &str,
     permissions: litellm_gateway_auth::Permissions,
 ) -> Router {
+    configured_app(model, api_base, permissions, None)
+}
+
+pub fn app_with_cache(
+    model: &str,
+    api_base: &str,
+    cache: litellm_cache_response::InferenceCache,
+) -> Router {
+    configured_app(
+        model,
+        api_base,
+        litellm_gateway_auth::Permissions::All,
+        Some(cache),
+    )
+}
+
+fn configured_app(
+    model: &str,
+    api_base: &str,
+    permissions: litellm_gateway_auth::Permissions,
+    cache: Option<litellm_cache_response::InferenceCache>,
+) -> Router {
     let pool = Arc::new(HttpClientPool::new(Arc::new(PublicDnsResolver)));
     let http = Resolution::from(&HttpSettings::default()).config;
     let secrets = Arc::new(NoSecrets);
     let resources = CoreResources::new(pool);
-    router(Arc::new(
-        Gateway::new(
-            resources,
-            http,
-            secrets,
-            [(
-                "public/model".into(),
-                Deployment {
-                    model: model.into(),
-                    api_base: Some(api_base.into()),
-                    api_key: Some("test-key".into()),
-                    timeout: Some(Duration::from_secs(5)),
-                    ..Default::default()
-                },
-            )]
-            .into_iter()
-            .collect(),
-        )
-        .unwrap(),
-    ))
-    .layer(axum::middleware::from_fn_with_state(
+    let gateway = Gateway::new(
+        resources,
+        http,
+        secrets,
+        [(
+            "public/model".into(),
+            Deployment {
+                model: model.into(),
+                api_base: Some(api_base.into()),
+                api_key: Some("test-key".into()),
+                timeout: Some(Duration::from_secs(5)),
+                ..Default::default()
+            },
+        )]
+        .into_iter()
+        .collect(),
+    )
+    .unwrap();
+    let gateway = match cache {
+        Some(cache) => gateway.with_cache(cache),
+        None => gateway,
+    };
+    router(Arc::new(gateway)).layer(axum::middleware::from_fn_with_state(
         permissions,
         test_identity,
     ))

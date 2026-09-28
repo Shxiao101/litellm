@@ -4,6 +4,7 @@
 //! maps a public model name to its deployment and runs the core route.
 
 mod audio_transcription;
+mod caching;
 mod chat_completions;
 mod error;
 pub mod messages;
@@ -27,6 +28,7 @@ pub use litellm_router::{Deployment, Router as ModelRouter};
 pub use request::{JsonObject, RequestId};
 
 pub struct Gateway {
+    pub response_cache: Option<litellm_cache_response::InferenceCache>,
     pub audio_transcription: AudioTranscriptionRoute,
     pub chat_completions: ChatCompletionsRoute,
     pub messages: MessagesRoute,
@@ -39,6 +41,13 @@ pub struct Gateway {
 }
 
 impl Gateway {
+    pub fn with_cache(self, cache: litellm_cache_response::InferenceCache) -> Self {
+        Self {
+            response_cache: Some(cache),
+            ..self
+        }
+    }
+
     pub fn new(
         resources: CoreResources,
         http: HttpClientConfig,
@@ -48,6 +57,7 @@ impl Gateway {
         let provider = resources.pool.client(&http, ClientVariant::Provider)?;
         let auth = resources.auth.clone();
         Ok(Self {
+            response_cache: None,
             audio_transcription: AudioTranscriptionRoute::new(
                 provider.clone(),
                 auth.clone(),

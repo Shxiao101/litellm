@@ -11,9 +11,7 @@ import litellm
 from litellm.caching.caching import Cache, disable_cache, enable_cache, update_cache
 from litellm.caching.in_memory_cache import InMemoryCache
 from litellm.rust_bridge import _native
-from litellm.rust_bridge.catalog import CacheRule, Route, RouteRule, SecretManagerRule
-from litellm.rust_bridge.configuration import Rollout
-from litellm.rust_bridge.response_cache import ResponseCacheRuntime, resolve_response_cache
+from litellm.rust_bridge.response_cache import ResponseCacheRuntime
 from litellm.types.caching import LiteLLMCacheType
 from tests.test_litellm_rust.support.cache import CacheLookup, CacheTestHandle, CacheTestResolver, request
 from tests.test_litellm_rust.support.isolation import rebound
@@ -25,7 +23,6 @@ def test_existing_constructor_and_global_are_unchanged() -> None:
     facade: Final = Cache(type=LiteLLMCacheType.LOCAL)
     assert type(facade.cache) is InMemoryCache
     assert "_native_cache_handle" not in vars(facade)
-    assert resolve_response_cache(facade) is None
     with rebound(litellm, "cache", facade):
         resolver: Final = CacheTestResolver(litellm)
         assert resolver.resolve().kind == "python_callback"
@@ -33,14 +30,9 @@ def test_existing_constructor_and_global_are_unchanged() -> None:
         assert cast(CacheLookup, facade).get_cache(cache_key="key") == {"answer": 7}
 
 
-async def test_catalog_constructs_native_runtime_from_public_cache_configuration() -> None:
-    rules: Final = (
-        RouteRule(Route.OCR, Rollout.PYTHON_ONLY),
-        SecretManagerRule(Rollout.PYTHON_ONLY, systems=frozenset({"local"})),
-        CacheRule(Rollout.RUST_REQUIRED, backends=frozenset({"local"})),
-    )
+async def test_explicit_selection_constructs_native_runtime_from_public_cache_configuration() -> None:
     facade: Final = Cache(type=LiteLLMCacheType.LOCAL)
-    runtime: Final = resolve_response_cache(facade, rules)
+    runtime: Final = ResponseCacheRuntime(_native._ResponseCacheRuntime.from_cache(facade))
     assert isinstance(runtime, ResponseCacheRuntime)
     assert runtime.kind == "native"
 
@@ -70,13 +62,8 @@ async def test_catalog_constructs_native_runtime_from_public_cache_configuration
 
 
 async def test_inference_resolver_uses_the_configured_native_cache_directly() -> None:
-    rules: Final = (
-        RouteRule(Route.OCR, Rollout.PYTHON_ONLY),
-        SecretManagerRule(Rollout.PYTHON_ONLY, systems=frozenset({"local"})),
-        CacheRule(Rollout.RUST_REQUIRED, backends=frozenset({"local"})),
-    )
     facade: Final = Cache(type=LiteLLMCacheType.LOCAL)
-    runtime: Final = resolve_response_cache(facade, rules)
+    runtime: Final = ResponseCacheRuntime(_native._ResponseCacheRuntime.from_cache(facade))
     assert isinstance(runtime, ResponseCacheRuntime)
     facade._native_cache = runtime
 
@@ -98,13 +85,8 @@ async def test_inference_resolver_uses_the_configured_native_cache_directly() ->
 
 
 async def test_inference_resolver_declines_a_native_runtime_whose_facade_changed() -> None:
-    rules: Final = (
-        RouteRule(Route.OCR, Rollout.PYTHON_ONLY),
-        SecretManagerRule(Rollout.PYTHON_ONLY, systems=frozenset({"local"})),
-        CacheRule(Rollout.RUST_REQUIRED, backends=frozenset({"local"})),
-    )
     facade: Final = Cache(type=LiteLLMCacheType.LOCAL)
-    runtime: Final = resolve_response_cache(facade, rules)
+    runtime: Final = ResponseCacheRuntime(_native._ResponseCacheRuntime.from_cache(facade))
     assert isinstance(runtime, ResponseCacheRuntime)
     facade._native_cache = runtime
     stale_request: Final = runtime.request(facade, {"cache_key": "stale-only"})

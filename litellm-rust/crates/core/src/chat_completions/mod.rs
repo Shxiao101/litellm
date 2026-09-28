@@ -17,6 +17,10 @@ pub struct ChatCompletionsRoute {
     http: litellm_http::Client,
     auth: Arc<AuthServices>,
     secrets: Arc<dyn SecretSource>,
+    cache: Option<(
+        litellm_cache_response::InferenceCache,
+        litellm_cache_response::InferenceCacheOptions,
+    )>,
 }
 
 impl ChatCompletionsRoute {
@@ -29,6 +33,18 @@ impl ChatCompletionsRoute {
             http,
             auth,
             secrets,
+            cache: None,
+        }
+    }
+
+    pub fn with_cache(
+        self,
+        cache: litellm_cache_response::InferenceCache,
+        options: litellm_cache_response::InferenceCacheOptions,
+    ) -> Self {
+        Self {
+            cache: Some((cache, options)),
+            ..self
         }
     }
 
@@ -37,7 +53,11 @@ impl ChatCompletionsRoute {
         request: ChatCompletionsRequest<'_>,
         hooks: &impl litellm_host::hooks::RouteHooks<Error>,
     ) -> Result<ChatCompletionsResponse, Error> {
-        litellm_host::lifecycle::observe_unary(hooks.observer(), self.run(request, hooks)).await
+        litellm_host::lifecycle::observe_unary(
+            hooks.observer(),
+            self.run_call(request.into(), hooks),
+        )
+        .await
     }
 
     #[tracing::instrument(name = "litellm.route", skip_all, fields(
