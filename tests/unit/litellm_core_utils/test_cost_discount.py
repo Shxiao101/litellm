@@ -91,8 +91,8 @@ def test_resolve_cost_discount_unclosed_bracket_matches_literally():
 
 
 def test_resolve_cost_discount_char_class_with_leading_bracket():
-    config = {"vertex_ai/a[]x]*": 0.1, "vertex_ai/ab*c*d": 0.2}
-    assert resolve_cost_discount(config, "vertex_ai", "a]q") == 0.1
+    config = {"vertex_ai/a[]x]*": 0.1, "vertex_ai/a]*": 0.2}
+    assert resolve_cost_discount(config, "vertex_ai", "a]q") == 0.2
     assert resolve_cost_discount(config, "vertex_ai", "axq") == 0.1
 
 
